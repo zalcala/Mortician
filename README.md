@@ -11,7 +11,7 @@
 - **Perceptually/logarithmically spaced frequency bands** (configurable)
 - **Feature normalization** for consistent visualization
 - **UDP streaming** of binary-packed feature frames
-- **Modular DSP and network code** for easy extension
+- **Highly modular DSP package** for easy extension and experimentation
 - **Debug UDP listener** for quick verification of output
 
 ---
@@ -19,11 +19,18 @@
 ## Project Structure
 
 - `main.py` — Main script: audio capture, analysis, and UDP streaming
-- `config.py` — Central configuration for DSP and network parameters
-- `dsp.py` — DSP utilities: band energy extraction, gain smoothing
+- `config.py` — Central configuration for DSP and network parameters (reads from `.env`)
+- `dsp/` — Modular DSP package:
+  - `windowing.py`: Window function utilities
+  - `bands.py`: Band edge calculation and mapping
+  - `envelope.py`: Envelope smoothing and dynamic gain
+  - `features.py`: Feature extraction (STFT, global features)
+  - `utils.py`: Shared helpers (placeholder)
+  - `__init__.py`: Main DSP API
 - `network.py` — UDP socket setup and frame sending
-- `audio_stream.py` — Entry point for starting the audio stream
-- `udp_debug_listener.py` — Simple UDP server for debugging/visualization
+- `utils/` — Utility scripts:
+  - `list_devices.py`: List available audio devices
+  - `udp_debug_listener.py`: Simple UDP server for debugging/visualization
 
 ---
 
@@ -34,7 +41,7 @@
    git clone <repo-url>
    cd Mortician
    ```
-2. **Set up a virtual environment (optional but recommended):**
+2. **Set up a virtual environment (recommended):**
    ```sh
    python3 -m venv venv
    source venv/bin/activate
@@ -53,14 +60,14 @@
 Before running the analyzer, list available audio devices to find your system's loopback device index:
 
 ```sh
-python list_devices.py
+python utils/list_devices.py
 ```
 
-Look for the device with the appropriate name and note its index. Use this index in `main.py` or `audio_stream.py`.
+Look for the device with the appropriate name and note its index. Use this index in `main.py`.
 
 ### 1. Start the Analyzer
 
-Edit `main.py` or `audio_stream.py` to set the correct audio device index for your system's loopback device.
+Edit `main.py` to set the correct audio device index for your system's loopback device.
 
 Run the analyzer:
 ```sh
@@ -71,7 +78,7 @@ python main.py
 
 In a separate terminal, run the UDP debug listener:
 ```sh
-python udp_debug_listener.py
+python utils/udp_debug_listener.py
 ```
 You should see incoming frames printed to the console.
 
@@ -79,7 +86,7 @@ You should see incoming frames printed to the console.
 
 ## Configuration
 
-All key parameters (sample rate, FFT size, number of bands, UDP IP/port, etc.) are set in `config.py`.
+All key parameters (sample rate, FFT size, number of bands, UDP IP/port, etc.) are set in `config.py`, which loads values from a `.env` file in the project root. Edit `.env` to customize your setup.
 
 ---
 
@@ -93,4 +100,3 @@ All key parameters (sample rate, FFT size, number of bands, UDP IP/port, etc.) a
 ## License
 
 This project is licensed under the GNU General Public License (GPL). See the LICENSE file for details.
-pi
