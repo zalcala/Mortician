@@ -12,21 +12,24 @@ This script:
 5. Streams frames via UDP for external visualization (e.g., Processing).
 
 Dependencies:
-    pip install sounddevice numpy
+    pip install sounddevice numpy python-dotenv
 """
 
-import socket, struct, time
+import socket
+import struct
+import time
 import sounddevice as sd
 import numpy as np
-import os
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+from config import SAMPLE_RATE, FFT_SIZE, NUM_BANDS
+from dsp import EnvelopeSmoother, stft_band_energy, compute_global_features
 
 # ---------------------------
 # Networking Setup (UDP Push)
 # ---------------------------
+import os
+from dotenv import load_dotenv
+load_dotenv()
 UDP_IP = os.getenv('UDP_IP', '127.0.0.1')   # Destination (localhost for testing)
 UDP_PORT = int(os.getenv('UDP_PORT', 5005))        # Port to send data to
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -34,71 +37,22 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # ---------------------------
 # Audio Analysis Parameters
 # ---------------------------
-SAMPLE_RATE = int(os.getenv('SAMPLE_RATE', 48000))
-FFT_SIZE    = int(os.getenv('FFT_SIZE', 1024))
-HOP_SIZE    = int(os.getenv('HOP_SIZE', FFT_SIZE // 2))
-NUM_BANDS   = int(os.getenv('NUM_BANDS', 32))
-
-# Precompute Hann window (applied before FFT to reduce spectral leakage)
-window = np.hanning(FFT_SIZE)
-
-# ---------------------------
-# Helper: Band Energy Extractor
-# ---------------------------
-def stft_band_energy(frame):
-    """
-    Compute band energies from a single audio frame.
-    
-    Args:
-        frame (np.ndarray): 1D mono audio buffer of length FFT_SIZE
-    
-    Returns:
-        band_env (list): Normalized energy (0–1) per frequency band
-    """
-    # Apply Hann window
-    frame_windowed = frame * window
-
-    # FFT → complex spectrum
-    spectrum = np.fft.rfft(frame_windowed)
-
-    # Magnitude spectrum (real amplitudes)
-    mag = np.abs(spectrum)
-
-    # Frequency bins corresponding to FFT result
-    freqs = np.fft.rfftfreq(FFT_SIZE, 1/SAMPLE_RATE)
-
-    # Define perceptual/logarithmic band edges
-    band_edges = np.geomspace(20, SAMPLE_RATE/2, NUM_BANDS+1)
-
-    # Compute mean energy per band
-    band_env = []
-    for i in range(NUM_BANDS):
-        mask = (freqs >= band_edges[i]) & (freqs < band_edges[i+1])
-        if np.any(mask):
-            band_env.append(np.mean(mag[mask]))
-        else:
-            band_env.append(0.0)
-
-    # Normalize to [0,1] range for consistent visualization
-    band_env = np.array(band_env)
-    if np.max(band_env) > 0:
-        band_env /= np.max(band_env)
-
-    return band_env.tolist()
+HOP_SIZE = FFT_SIZE // 2
 
 # ---------------------------
 # Audio Callback
 # ---------------------------
-# Global buffer for overlapping frames
 buffer = np.zeros(FFT_SIZE)
-hop_size = FFT_SIZE // 2
+hop_size = HOP_SIZE
+smoother = EnvelopeSmoother(num_bands=NUM_BANDS)
+prev_band_env = np.zeros(NUM_BANDS)
 
 def audio_callback(indata, frames, time_info, status):
     """
     Audio callback with rolling buffer to ensure FFT_SIZE samples
     and 50% overlap for STFT.
     """
-    global buffer
+    global buffer, prev_band_env
 
     # Convert stereo → mono
     mono = np.mean(indata, axis=1)
@@ -116,23 +70,19 @@ def audio_callback(indata, frames, time_info, status):
     # Full frame ready for STFT
     frame = buffer.copy()
 
-    # ----------------------
     # DSP: Band Energy
-    # ----------------------
-    band_env = stft_band_energy(frame)
+    raw_band_env = stft_band_energy(frame)
+    band_env = smoother.process(raw_band_env)
 
-    # Placeholder per-band flux (frame-to-frame difference)
-    # For real flux, you can maintain a previous band_env global variable
-    band_flux = band_env.copy()
+    # Per-band flux (frame-to-frame difference)
+    band_flux = np.abs(band_env - prev_band_env)
+    prev_band_env = band_env.copy()
 
-    # Placeholder per-band gain offsets
+    # Per-band gain offsets (for now, all 1.0)
     band_gain = [1.0] * NUM_BANDS
 
     # Global features
-    centroid  = float(np.mean(band_env))
-    flux      = float(np.mean(np.diff(band_env))) if len(band_env) > 1 else 0
-    loudness  = float(np.mean(np.square(frame)))
-    transient = float(np.max(band_env) > 0.8)
+    centroid, flux, loudness, transient = compute_global_features(band_env, prev_band_env)
 
     # Timestamp
     timestamp = time.time()
@@ -140,8 +90,8 @@ def audio_callback(indata, frames, time_info, status):
     # Construct frame according to schema
     frame_data = (
         [timestamp, float(NUM_BANDS)]
-        + band_env
-        + band_flux
+        + band_env.tolist()
+        + band_flux.tolist()
         + band_gain
         + [centroid, flux, loudness, transient]
     )
@@ -149,7 +99,6 @@ def audio_callback(indata, frames, time_info, status):
     # Pack floats to binary and send via UDP
     frame_bytes = struct.pack(f'{len(frame_data)}f', *frame_data)
     sock.sendto(frame_bytes, (UDP_IP, UDP_PORT))
-
 
 # ---------------------------
 # Main Audio Stream
@@ -165,7 +114,7 @@ stream = sd.InputStream(
 # Run forever (blocking loop)
 print("🎵 Streaming live analyzer data over UDP...")
 print("   Listening on device (loopback required).")
-print("   Sending to {}:{}".format(UDP_IP, UDP_PORT))
+print(f"   Sending to {UDP_IP}:{UDP_PORT}")
 
 with stream:
     while True:
