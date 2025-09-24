@@ -18,21 +18,26 @@ Dependencies:
 import socket, struct, time
 import sounddevice as sd
 import numpy as np
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ---------------------------
 # Networking Setup (UDP Push)
 # ---------------------------
-UDP_IP = "127.0.0.1"   # Destination (localhost for testing)
-UDP_PORT = 5005        # Port to send data to
+UDP_IP = os.getenv('UDP_IP', '127.0.0.1')   # Destination (localhost for testing)
+UDP_PORT = int(os.getenv('UDP_PORT', 5005))        # Port to send data to
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # ---------------------------
 # Audio Analysis Parameters
 # ---------------------------
-SAMPLE_RATE = 48000    # Matches project spec (Layer 1 choice)
-FFT_SIZE    = 1024     # Window size (N)
-HOP_SIZE    = FFT_SIZE // 2  # 50% overlap
-NUM_BANDS   = 32       # Perceptual/log-spaced bands for visualization
+SAMPLE_RATE = int(os.getenv('SAMPLE_RATE', 48000))
+FFT_SIZE    = int(os.getenv('FFT_SIZE', 1024))
+HOP_SIZE    = int(os.getenv('HOP_SIZE', FFT_SIZE // 2))
+NUM_BANDS   = int(os.getenv('NUM_BANDS', 32))
 
 # Precompute Hann window (applied before FFT to reduce spectral leakage)
 window = np.hanning(FFT_SIZE)

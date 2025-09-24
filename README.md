@@ -41,12 +41,22 @@
    ```
 3. **Install dependencies:**
    ```sh
-   pip install sounddevice numpy
+   pip install -r requirements.txt
    ```
 
 ---
 
 ## Usage
+
+### 0. Find Your Loopback Device Index
+
+Before running the analyzer, list available audio devices to find your system's loopback device index:
+
+```sh
+python list_devices.py
+```
+
+Look for the device with the appropriate name and note its index. Use this index in `main.py` or `audio_stream.py`.
 
 ### 1. Start the Analyzer
 
@@ -83,3 +93,4 @@ All key parameters (sample rate, FFT size, number of bands, UDP IP/port, etc.) a
 ## License
 
 This project is licensed under the GNU General Public License (GPL). See the LICENSE file for details.
+pi

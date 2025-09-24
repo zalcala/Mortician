@@ -1,8 +1,12 @@
+import os
+from dotenv import load_dotenv
 import socket
 import struct
 
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
+load_dotenv()
+
+UDP_IP = os.getenv('UDP_IP', '127.0.0.1')
+UDP_PORT = int(os.getenv('UDP_PORT', 5005))
 
 # Set up UDP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

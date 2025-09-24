@@ -1,5 +1,13 @@
+import os
+from dotenv import load_dotenv
 import numpy as np
-from config import FFT_SIZE, SAMPLE_RATE, NUM_BANDS, WINDOW
+
+load_dotenv()
+
+FFT_SIZE = int(os.getenv('FFT_SIZE', 1024))
+SAMPLE_RATE = int(os.getenv('SAMPLE_RATE', 48000))
+NUM_BANDS = int(os.getenv('NUM_BANDS', 32))
+WINDOW = os.getenv('WINDOW', 'hann')
 
 if WINDOW == 'hann':
     window = np.hanning(FFT_SIZE)
