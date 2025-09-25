@@ -21,7 +21,7 @@ import time
 import sounddevice as sd
 import numpy as np
 
-from config import SAMPLE_RATE, FFT_SIZE, NUM_BANDS
+from config import SAMPLE_RATE, FFT_SIZE, NUM_BANDS, DEVICE_INDEX
 from dsp import EnvelopeSmoother, stft_band_energy, compute_global_features
 
 # ---------------------------
@@ -104,7 +104,7 @@ def audio_callback(indata, frames, time_info, status):
 # Main Audio Stream
 # ---------------------------
 stream = sd.InputStream(
-    device=0,         # 🔑 Must set this to your loopback device index
+    device=DEVICE_INDEX,         # Set from config.py/.env
     channels=2,          # Capture stereo, mix down to mono
     samplerate=SAMPLE_RATE,
     blocksize=HOP_SIZE,  # Controls callback rate (~60 FPS with 50% overlap)
