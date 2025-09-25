@@ -20,24 +20,38 @@ import struct
 import time
 import sounddevice as sd
 import numpy as np
-
+import os
 from config import SAMPLE_RATE, FFT_SIZE, NUM_BANDS, DEVICE_INDEX
 from dsp import EnvelopeSmoother, stft_band_energy, compute_global_features
 
 # ---------------------------
 # Networking Setup (UDP Push)
 # ---------------------------
-import os
 from dotenv import load_dotenv
 load_dotenv()
 UDP_IP = os.getenv('UDP_IP', '127.0.0.1')   # Destination (localhost for testing)
 UDP_PORT = int(os.getenv('UDP_PORT', 5005))        # Port to send data to
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+# Send config packet with number of bands
+config_msg = f"CONFIG:{NUM_BANDS}".encode()
+sock.sendto(config_msg, (UDP_IP, UDP_PORT))
+time.sleep(0.1)  # 100 ms delay to ensure CONFIG is received first
+
 # ---------------------------
 # Audio Analysis Parameters
 # ---------------------------
 HOP_SIZE = FFT_SIZE // 2
+
+# Gain and smoothing parameters from .env
+GAIN_ALPHA = float(os.getenv('GAIN_ALPHA', '0.01'))
+GAIN_MIN = float(os.getenv('GAIN_MIN', '0.5'))
+GAIN_MAX = float(os.getenv('GAIN_MAX', '3.0'))
+SMA_WINDOW = int(os.getenv('SMA_WINDOW', '50'))  # Number of frames for the moving average
+
+if 'band_buffers' not in globals():
+    band_buffers = [ [0.0]*SMA_WINDOW for _ in range(NUM_BANDS) ]
+    band_buffer_idx = 0
 
 # ---------------------------
 # Audio Callback
@@ -46,13 +60,15 @@ buffer = np.zeros(FFT_SIZE)
 hop_size = HOP_SIZE
 smoother = EnvelopeSmoother(num_bands=NUM_BANDS)
 prev_band_env = np.zeros(NUM_BANDS)
+long_term_avg = np.ones(NUM_BANDS) * 1e-6  # For dynamic gain
+
 
 def audio_callback(indata, frames, time_info, status):
     """
     Audio callback with rolling buffer to ensure FFT_SIZE samples
     and 50% overlap for STFT.
     """
-    global buffer, prev_band_env
+    global buffer, prev_band_env, band_buffers, band_buffer_idx
 
     # Convert stereo → mono
     mono = np.mean(indata, axis=1)
@@ -78,11 +94,20 @@ def audio_callback(indata, frames, time_info, status):
     band_flux = np.abs(band_env - prev_band_env)
     prev_band_env = band_env.copy()
 
-    # Per-band gain offsets (for now, all 1.0)
-    band_gain = [1.0] * NUM_BANDS
+    # --- Simple Moving Average for Band Gain ---
+    for i in range(NUM_BANDS):
+        band_buffers[i][band_buffer_idx % SMA_WINDOW] = band_env[i]
+    band_buffer_idx += 1
+    long_term_avg = np.array([np.mean(band_buffers[i]) for i in range(NUM_BANDS)])
+
+    band_gain = np.log1p(1.0 / (long_term_avg + 1e-6))
+    band_gain = np.clip(band_gain, GAIN_MIN, GAIN_MAX)
+
+    # Apply gain compensation to band energies
+    compensated_band_env = band_env * band_gain
 
     # Global features
-    centroid, flux, loudness, transient = compute_global_features(band_env, prev_band_env)
+    centroid, flux, loudness, transient = compute_global_features(compensated_band_env, prev_band_env)
 
     # Timestamp
     timestamp = time.time()
@@ -90,9 +115,9 @@ def audio_callback(indata, frames, time_info, status):
     # Construct frame according to schema
     frame_data = (
         [timestamp, float(NUM_BANDS)]
-        + band_env.tolist()
+        + compensated_band_env.tolist()
         + band_flux.tolist()
-        + band_gain
+        + band_gain.tolist()
         + [centroid, flux, loudness, transient]
     )
 

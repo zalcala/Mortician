@@ -88,6 +88,21 @@ You should see incoming frames printed to the console.
 
 All key parameters (sample rate, FFT size, number of bands, UDP IP/port, etc.) are set in `config.py`, which loads values from a `.env` file in the project root. Edit `.env` to customize your setup.
 
+### Gain and Smoothing Parameters in `.env`
+
+- `GAIN_ALPHA`: Smoothing factor for the moving average of each band's energy. Lower = slower, more stable gain adaptation. Higher = more responsive, less stable.
+- `GAIN_MIN`: Minimum allowed gain for any band. Prevents excessive boosting of quiet bands (can reduce noise).
+- `GAIN_MAX`: Maximum allowed gain for any band. Prevents excessive attenuation/boosting of loud/quiet bands.
+- `SMA_WINDOW`: Number of frames used for the simple moving average (SMA) of each band's energy. Higher = smoother, more historical average. Lower = more responsive to recent changes.
+
+Example `.env` section:
+```
+GAIN_ALPHA=0.01
+GAIN_MIN=0.5
+GAIN_MAX=3.0
+SMA_WINDOW=50
+```
+
 ---
 
 ## Notes
