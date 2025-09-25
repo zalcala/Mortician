@@ -1,0 +1,27 @@
+# Mortician Backend Sample .env
+# Copy this file to .env and edit as needed.
+
+# DSP and Gain Smoothing Parameters
+# Smoothing factor for the moving average of each band's energy.
+# Lower = slower, more stable gain adaptation. Higher = more responsive, less stable.
+GAIN_ALPHA=0.01
+
+# Minimum allowed gain for any band. Prevents excessive boosting of quiet bands (can reduce noise).
+GAIN_MIN=0.5
+
+# Maximum allowed gain for any band. Prevents excessive attenuation/boosting of loud/quiet bands.
+GAIN_MAX=3.0
+
+# Number of frames used for the simple moving average (SMA) of each band's energy.
+# Higher = smoother, more historical average. Lower = more responsive to recent changes.
+SMA_WINDOW=50
+
+# Standard DSP and network parameters
+SAMPLE_RATE=48000
+FFT_SIZE=1024
+NUM_BANDS=32
+DEVICE_INDEX=0
+
+# UDP Settings
+UDP_IP=127.0.0.1
+UDP_PORT=5005
